@@ -83,32 +83,76 @@
 
   /* ---- route progress ---- */
   .route{
-    display:flex;
-    align-items:center;
-    padding:18px 24px 6px 24px;
-    gap:0;
-    background:var(--shopee-tint);
-  }
-  .checkpoint{
-    width:11px;height:11px;border-radius:50%;
-    background:#f3cdbf;
-    flex-shrink:0;
     position:relative;
-    transition:background .3s ease, transform .3s ease;
+    padding:26px 24px 30px 24px;
+    background:var(--shopee-tint);
+    overflow:hidden;
   }
-  .checkpoint.done{background:var(--shopee);}
-  .checkpoint.current{
-    background:var(--amber);
-    transform:scale(1.4);
-    box-shadow:0 0 0 4px rgba(255,177,0,0.25);
+  /* asfalto */
+  .road{
+    position:relative;
+    height:16px;
+    border-radius:8px;
+    background:linear-gradient(#565b63, #3f434a);
+    box-shadow:inset 0 2px 3px rgba(0,0,0,0.25);
+    margin:0 6px;
   }
-  .segment{
-    flex:1;
-    height:2px;
-    background:#f3cdbf;
-    margin:0 3px;
+  /* faixa central tracejada da rua */
+  .road::before{
+    content:"";
+    position:absolute;
+    left:8px; right:8px; top:50%;
+    height:2px; transform:translateY(-50%);
+    background:repeating-linear-gradient(
+      to right, #ffd23f 0 12px, transparent 12px 24px);
+    opacity:.85;
   }
-  .segment.done{background:var(--shopee);}
+  /* progresso já percorrido, sobre o asfalto */
+  .road-done{
+    position:absolute;
+    left:0; top:0; bottom:0;
+    width:0%;
+    border-radius:8px 0 0 8px;
+    background:linear-gradient(90deg, rgba(238,77,45,.0), rgba(238,77,45,.35));
+    transition:width .5s cubic-bezier(.4,0,.2,1);
+    pointer-events:none;
+  }
+  /* pontos de entrega ao longo da rua */
+  .stop{
+    position:absolute;
+    top:50%;
+    transform:translate(-50%,-50%);
+    width:22px;height:22px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:14px;
+    line-height:1;
+    filter:grayscale(.55) opacity(.7);
+    transition:filter .3s ease, transform .3s ease;
+    z-index:2;
+  }
+  .stop.done{ filter:none; transform:translate(-50%,-50%) scale(1); }
+  .stop.current{ filter:none; transform:translate(-50%,-50%) scale(1.25); }
+  /* o utilitário que anda na rua */
+  .van{
+    position:absolute;
+    top:-14px;
+    left:0%;
+    font-size:24px;
+    line-height:1;
+    transform:translateX(-50%) scaleX(-1);
+    transition:left .6s cubic-bezier(.4,0,.2,1);
+    z-index:3;
+    filter:drop-shadow(0 3px 3px rgba(0,0,0,.25));
+  }
+  .van.moving{ animation:vanBob .4s ease-in-out infinite; }
+  @keyframes vanBob{
+    0%,100%{ margin-top:0; }
+    50%{ margin-top:-2px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .van.moving{ animation:none; }
+    .road-done, .van{ transition:none; }
+  }
 
   .meta-row{
     display:flex;
@@ -405,7 +449,12 @@
     </div>
   </div>
 
-  <div class="route" id="routeBar"></div>
+  <div class="route" id="routeBar">
+    <div class="road" id="road">
+      <div class="road-done" id="roadDone"></div>
+      <div class="van" id="van">🚚</div>
+    </div>
+  </div>
   <div class="meta-row">
     <span id="enigmaCounter">Enigma: 0 / 10</span>
     <span id="hintCounter">Pistas: 0/3</span>
@@ -469,7 +518,6 @@
       <div class="lb-title">Ranking da reunião</div>
       <ul class="leaderboard" id="leaderboardList"></ul>
       <button class="btn btn-ghost" id="refreshBtn" style="width:100%;margin-top:12px;">🔄 Atualizar ranking</button>
-      <button class="btn btn-ghost" id="restartBtn" style="width:100%;margin-top:10px;">Jogar novamente</button>
     </div>
 
   </div>
@@ -499,7 +547,7 @@ const MIN_POINTS = 40;
 
 /* ===== SUPABASE — cole suas credenciais ===== */
 const SUPABASE_URL = "https://tslhvfvwhybaqhkwbgyl.supabase.co";
-const SUPABASE_ANON_KEY = "COLE_AQUI_A_ANON_KEY";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzbGh2ZnZ3aHliYXFoa3diZ3lsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjcwMzgsImV4cCI6MjA5NTM0MzAzOH0.pHUeMP1XDDdchCLA1aklnWUEowO_IJaT2svvR8wajH4";
 const TABELA = "desafio_ranking";
 
 function sbHeaders(){
@@ -556,6 +604,28 @@ const Sound = (function(){
     osc.connect(g); g.connect(c.destination);
     osc.start(t0); osc.stop(t0+(dur||0.15)+0.02);
   }
+  // "buzina" — beep-beep de buzina de van
+  function engine(){
+    const c = ac(); if(!c || muted) return;
+    const t0 = c.currentTime;
+
+    // cada beep = 2 osciladores (acorde de buzina) com filtro
+    function beep(at, dur){
+      [[440, "square"], [554, "sawtooth"]].forEach(([f, tp]) => {
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = tp; o.frequency.value = f;
+        const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 2600;
+        g.gain.setValueAtTime(0.0001, at);
+        g.gain.linearRampToValueAtTime(0.14, at+0.015);
+        g.gain.setValueAtTime(0.14, at+dur-0.03);
+        g.gain.exponentialRampToValueAtTime(0.0001, at+dur);
+        o.connect(lp); lp.connect(g); g.connect(c.destination);
+        o.start(at); o.stop(at+dur+0.02);
+      });
+    }
+    beep(t0, 0.12);
+    beep(t0+0.17, 0.15);
+  }
   return {
     unlock(){ const c = ac(); if(c && c.state === "suspended") c.resume(); },
     setMuted(m){ muted = m; },
@@ -565,6 +635,7 @@ const Sound = (function(){
     correct(){ tone(659,0.12,"sine",0,0.18); tone(784,0.12,"sine",0.1,0.18); tone(1047,0.22,"sine",0.2,0.2); },
     wrong(){ tone(196,0.18,"sawtooth",0,0.14); tone(147,0.28,"sawtooth",0.12,0.14); },
     hint(){ tone(880,0.08,"triangle",0,0.12); tone(1175,0.1,"triangle",0.08,0.12); },
+    drive(){ engine(); },
     win(pct){
       const notes = pct>=0.7 ? [523,659,784,1047,1319] : [523,659,784];
       notes.forEach((f,i)=> tone(f, 0.28, "sine", i*0.14, 0.2));
@@ -645,35 +716,54 @@ function showScreen(id){
   $(id).classList.add("active");
 }
 
+function stopLeftPercent(i){
+  // distribui as entregas com margem nas pontas para não colar nas bordas
+  const n = QUESTIONS.length;
+  const start = 6, end = 94; // %
+  if(n <= 1) return 50;
+  return start + (end - start) * (i / (n - 1));
+}
+
 function buildRoute(){
-  const bar = $("routeBar");
-  bar.innerHTML = "";
+  const road = $("road");
+  // remove entregas antigas (mantém road-done e van)
+  road.querySelectorAll(".stop").forEach(s => s.remove());
   for(let i=0;i<QUESTIONS.length;i++){
-    const cp = document.createElement("div");
-    cp.className = "checkpoint";
-    cp.id = "cp-" + i;
-    bar.appendChild(cp);
-    if(i < QUESTIONS.length - 1){
-      const seg = document.createElement("div");
-      seg.className = "segment";
-      seg.id = "seg-" + i;
-      bar.appendChild(seg);
-    }
+    const stop = document.createElement("div");
+    stop.className = "stop";
+    stop.id = "stop-" + i;
+    stop.textContent = "📦";
+    stop.style.left = stopLeftPercent(i) + "%";
+    road.appendChild(stop);
   }
   updateRoute();
 }
 
 function updateRoute(){
   for(let i=0;i<QUESTIONS.length;i++){
-    const cp = $("cp-" + i);
-    cp.classList.remove("done","current");
-    if(i < state.current) cp.classList.add("done");
-    else if(i === state.current) cp.classList.add("current");
-    if(i < QUESTIONS.length - 1){
-      const seg = $("seg-" + i);
-      seg.classList.toggle("done", i < state.current);
+    const stop = $("stop-" + i);
+    if(!stop) continue;
+    stop.classList.remove("done","current");
+    if(i < state.current){
+      stop.classList.add("done");
+      stop.textContent = "✅";        // entrega concluída
+    } else if(i === state.current){
+      stop.classList.add("current");
+      stop.textContent = "🏠";        // destino atual
+    } else {
+      stop.textContent = "📦";        // entrega pendente
     }
   }
+  // move o van até a entrega atual e preenche a rua percorrida
+  const van = $("van");
+  const done = $("roadDone");
+  const pos = stopLeftPercent(Math.min(state.current, QUESTIONS.length - 1));
+  van.style.left = pos + "%";
+  done.style.width = pos + "%";
+  // pequena "corridinha" ao trocar de entrega
+  van.classList.add("moving");
+  clearTimeout(window._vanTimer);
+  window._vanTimer = setTimeout(() => van.classList.remove("moving"), 650);
 }
 
 function letterSlots(answer){
@@ -844,8 +934,11 @@ function submitAnswer(){
     state.solvedCount = (state.solvedCount || 0) + 1;
     Sound.correct();
     $("scoreDisplay").textContent = state.score;
-    $("feedback").textContent = "Correto! +" + points + " pontos";
+    $("feedback").textContent = "📦 Entrega concluída! +" + points + " pontos";
     $("feedback").className = "feedback ok pop";
+    // marca a casa atual como entregue na rua
+    const stopNow = $("stop-" + state.current);
+    if(stopNow){ stopNow.classList.remove("current"); stopNow.classList.add("done"); stopNow.textContent = "✅"; }
   } else {
     $("feedback").textContent = "Não foi dessa vez. Resposta: " + item.a;
     $("feedback").className = "feedback bad";
@@ -859,12 +952,18 @@ function nextQuestion(){
   if(state.current >= QUESTIONS.length){
     finishGame();
   } else {
+    Sound.drive();
     renderQuestion();
   }
 }
 
 async function finishGame(){
   state.elapsedMs = Date.now() - state.startTime;
+
+  // van completa a rota até o fim da rua
+  const vanEl = $("van"), doneEl = $("roadDone");
+  if(vanEl){ vanEl.style.left = "100%"; vanEl.classList.add("moving"); setTimeout(()=>vanEl.classList.remove("moving"), 650); }
+  if(doneEl){ doneEl.style.width = "100%"; }
 
   $("finalPlayerName").textContent = state.name;
   $("finalScore").textContent = state.score;
@@ -971,12 +1070,11 @@ $("startBtn").addEventListener("click", () => {
   buildRoute();
   showScreen("screen-game");
   renderQuestion();
+  Sound.drive();
 });
 
 $("submitBtn").addEventListener("click", submitAnswer);
 $("hintBtn").addEventListener("click", useHint);$("nextBtn").addEventListener("click", nextQuestion);
-$("restartBtn").addEventListener("click", resetGame);
-
 $("refreshBtn").addEventListener("click", async () => {
   Sound.click();
   const ul = $("leaderboardList");
