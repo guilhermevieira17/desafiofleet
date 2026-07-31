@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login — Desafio Operacional Fleet</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
+
+  :root{
+    --shopee: #ee4d2d;
+    --shopee-dark: #d5401f;
+    --shopee-deep: #b8341a;
+    --shopee-tint: #fff1ec;
+    --panel: #ffffff;
+    --page: #f5f5f5;
+    --line: #f0e4df;
+    --amber: #ffb100;
+    --green: #05a66d;
+    --red: #e5484d;
+    --ink: #222222;
+    --ink-dim: #8a8a8a;
+    --display: 'Poppins', sans-serif;
+    --body: 'Inter', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--page);
+    color:var(--ink);
+    font-family:var(--body);
+    min-height:100vh;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:32px 16px;
+  }
+
+  .app{
+    width:100%;
+    max-width:720px;
+    background:var(--panel);
+    border-radius:18px;
+    overflow:hidden;
+    box-shadow:0 20px 45px -20px rgba(238,77,45,0.35), 0 2px 8px rgba(0,0,0,0.06);
+  }
+
+  .topbar{
+    background:linear-gradient(120deg, var(--shopee) 0%, #ff6a3d 100%);
+    padding:18px 22px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .topbar-title{
+    font-family:var(--display);
+    font-weight:700;
+    font-size:20px;
+    letter-spacing:0.2px;
+    color:#ffffff;
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .topbar-title .truck{font-size:24px;}
+  .hub-tag{
+    background:rgba(255,255,255,0.2);
+    border-radius:999px;
+    padding:6px 14px;
+    font-family:var(--mono);
+    font-weight:700;
+    font-size:12px;
+    color:#ffffff;
+    letter-spacing:0.5px;
+  }
+
+  .content{padding:26px 28px 30px 28px;}
+
+  .badge{
+    border:1.5px dashed #f3cdbf;
+    background:var(--shopee-tint);
+    border-radius:16px;
+    padding:32px 24px;
+    text-align:center;
+  }
+  .badge .truck-big{font-size:44px;display:block;margin-bottom:8px;}
+  .badge h1{
+    font-family:var(--display);
+    font-weight:700;
+    font-size:26px;
+    letter-spacing:0.2px;
+    margin:0 0 6px 0;
+    color:var(--ink);
+  }
+  .badge .sub{
+    color:var(--ink-dim);
+    font-size:14.5px;
+    line-height:1.5;
+    margin:0 0 26px 0;
+  }
+
+  .field-group{margin-bottom:16px;text-align:left;}
+  .field-label{
+    display:block;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:1px;
+    color:var(--shopee);
+    font-weight:700;
+    margin-bottom:8px;
+  }
+  input[type=text]{
+    width:100%;
+    background:#ffffff;
+    border:1.5px solid #f0d4c9;
+    color:var(--ink);
+    font-family:var(--body);
+    font-size:16px;
+    padding:13px 14px;
+    border-radius:10px;
+    outline:none;
+    transition:border-color .2s;
+  }
+  input[type=text].ops-field{
+    font-family:var(--mono);
+    font-weight:700;
+    letter-spacing:2px;
+    font-size:18px;
+  }
+  input[type=text]:focus{border-color:var(--shopee);}
+  input[type=text].invalid{border-color:var(--red);background:#fff5f5;}
+
+  .hint{
+    font-size:12px;
+    color:var(--ink-dim);
+    margin-top:6px;
+    min-height:16px;
+  }
+  .hint.error{color:var(--red);font-weight:600;}
+
+  .btn{
+    border:none;
+    border-radius:999px;
+    padding:14px 24px;
+    font-family:var(--display);
+    font-weight:700;
+    font-size:16px;
+    letter-spacing:0.2px;
+    cursor:pointer;
+    transition:transform .12s ease, filter .12s ease, box-shadow .12s ease;
+  }
+  .btn:active{transform:translateY(1px);}
+  .btn-primary{
+    background:linear-gradient(120deg, var(--shopee) 0%, #ff6a3d 100%);
+    color:#ffffff;
+    width:100%;
+    margin-top:12px;
+    box-shadow:0 8px 18px -6px rgba(238,77,45,0.55);
+  }
+  .btn-primary:hover{filter:brightness(1.05);}
+  .btn-primary:disabled{opacity:0.4;cursor:not-allowed;box-shadow:none;}
+
+  .btn-primary .spinner{
+    display:inline-block;
+    width:16px;height:16px;
+    border:2px solid rgba(255,255,255,0.4);
+    border-top-color:#fff;
+    border-radius:50%;
+    animation:spin .7s linear infinite;
+    vertical-align:-3px;
+    margin-right:8px;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* faixa de sessão ativa (aparece após login) */
+  .session-strip{
+    display:none;
+    align-items:center;
+    justify-content:space-between;
+    background:var(--shopee-tint);
+    border-bottom:1px solid var(--line);
+    padding:12px 22px;
+    font-size:13px;
+  }
+  .session-strip.active{display:flex;}
+  .session-strip .who{
+    font-family:var(--display);
+    font-weight:600;
+    color:var(--shopee-deep);
+    display:flex;align-items:center;gap:8px;
+  }
+  .session-strip .who .dot{
+    width:8px;height:8px;border-radius:50%;
+    background:var(--green);
+    box-shadow:0 0 0 3px rgba(5,166,109,0.2);
+  }
+  .session-strip .ops-code{font-family:var(--mono);font-weight:700;}
+  .link-exit{
+    background:none;border:none;
+    color:var(--ink-dim);
+    font-family:var(--body);
+    font-size:12px;font-weight:600;
+    cursor:pointer;
+    text-decoration:underline;
+  }
+
+  /* placeholder da área do desafio */
+  .challenge-slot{
+    display:none;
+    padding:40px 24px;
+    text-align:center;
+    color:var(--ink-dim);
+    font-size:14px;
+    line-height:1.6;
+  }
+  .challenge-slot.active{display:block;}
+  .challenge-slot code{
+    font-family:var(--mono);
+    background:var(--shopee-tint);
+    color:var(--shopee-deep);
+    padding:2px 6px;border-radius:5px;font-size:12.5px;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="topbar-title"><span class="truck">🚚</span> Desafio Operacional Fleet</div>
+    <div class="hub-tag" id="hubTag">LPR-16</div>
+  </div>
+
+  <!-- faixa que mostra quem está logado (aparece após o login) -->
+  <div class="session-strip" id="sessionStrip">
+    <div class="who"><span class="dot"></span> Sessão ativa · OPS <span class="ops-code" id="sessionOps">—</span></div>
+    <button class="link-exit" id="btnExit">Trocar OPS</button>
+  </div>
+
+  <div class="content">
+
+    <!-- TELA DE LOGIN -->
+    <div class="badge" id="loginScreen">
+      <span class="truck-big">🎯</span>
+      <h1>Identifique-se para começar</h1>
+      <p class="sub">Informe sua matrícula OPS para registrar quem realizou o desafio e o resultado final.</p>
+
+      <div class="field-group">
+        <label class="field-label" for="opsInput">Matrícula OPS</label>
+        <input type="text" id="opsInput" class="ops-field" placeholder="ops000000"
+               autocomplete="off" inputmode="latin" maxlength="12" />
+        <div class="hint" id="opsHint">Ex.: ops37310</div>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" for="nomeInput">Nome (opcional)</label>
+        <input type="text" id="nomeInput" placeholder="Como aparece no crachá"
+               autocomplete="off" maxlength="60" />
+        <div class="hint">Ajuda na hora de consultar a planilha.</div>
+      </div>
+
+      <button class="btn btn-primary" id="btnStart" disabled>Iniciar desafio</button>
+    </div>
+
+    <!-- ONDE O SEU DESAFIO ENTRA -->
+    <div class="challenge-slot" id="challengeSlot">
+      <p>Área do desafio.<br>
+      Cole aqui as telas do seu quiz (a barra de rota, perguntas, placar…).<br><br>
+      Quando o participante terminar, chame:<br>
+      <code>FleetLogin.registrar(acertos, total)</code><br>
+      que grava OPS + nome + resultado na planilha.</p>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   CAMADA DE LOGIN + REGISTRO — Desafio Operacional Fleet
+   Cole o CONTEÚDO do seu desafio dentro de #challengeSlot.
+   No fim do desafio, chame:  FleetLogin.registrar(acertos, total)
+   ============================================================ */
+
+const FleetLogin = (function () {
+
+  // >>> COLE AQUI a URL do WebApp do Apps Script (deploy do registro_backend.gs)
+  const WEBAPP_URL = "COLE_AQUI_A_URL_DO_APPS_SCRIPT/exec";
+
+  // Hub deste deploy (aparece no topo e vai pra planilha)
+  const HUB = "LPR-16";
+
+  const el = {
+    login:    document.getElementById('loginScreen'),
+    slot:     document.getElementById('challengeSlot'),
+    strip:    document.getElementById('sessionStrip'),
+    ops:      document.getElementById('opsInput'),
+    nome:     document.getElementById('nomeInput'),
+    hint:     document.getElementById('opsHint'),
+    start:    document.getElementById('btnStart'),
+    exit:     document.getElementById('btnExit'),
+    sessOps:  document.getElementById('sessionOps'),
+    hubTag:   document.getElementById('hubTag'),
+  };
+
+  let sessao = null; // { ops, nome, hub, inicio }
+
+  el.hubTag.textContent = HUB;
+
+  // aceita "ops37310", "OPS 37310", "37310" -> normaliza p/ "ops37310"
+  function normalizaOps(v){
+    const num = (v || '').toLowerCase().replace(/[^0-9]/g,'');
+    return num ? 'ops' + num : '';
+  }
+  function opsValido(v){
+    const n = (v || '').replace(/[^0-9]/g,'');
+    return n.length >= 4; // ajuste a regra se sua matrícula tiver tamanho fixo
+  }
+
+  el.ops.addEventListener('input', () => {
+    const ok = opsValido(el.ops.value);
+    el.start.disabled = !ok;
+    el.ops.classList.toggle('invalid', el.ops.value.length > 0 && !ok);
+    el.hint.textContent = ok ? 'OK — pode iniciar' : 'Ex.: ops37310';
+    el.hint.classList.toggle('error', el.ops.value.length > 0 && !ok);
+  });
+  el.ops.addEventListener('keydown', e => { if(e.key === 'Enter' && !el.start.disabled) iniciar(); });
+
+  function iniciar(){
+    const ops = normalizaOps(el.ops.value);
+    if(!opsValido(ops)) return;
+    sessao = { ops, nome: el.nome.value.trim(), hub: HUB, inicio: Date.now() };
+
+    el.sessOps.textContent = ops;
+    el.strip.classList.add('active');
+    el.login.style.display = 'none';
+    el.slot.classList.add('active');
+
+    // dispara um evento caso seu desafio precise iniciar/resetar algo
+    document.dispatchEvent(new CustomEvent('fleet:iniciado', { detail: { ...sessao } }));
+  }
+
+  function sair(){
+    sessao = null;
+    el.strip.classList.remove('active');
+    el.slot.classList.remove('active');
+    el.login.style.display = '';
+    el.ops.value = ''; el.nome.value = '';
+    el.start.disabled = true;
+    el.hint.textContent = 'Ex.: ops37310'; el.hint.classList.remove('error');
+  }
+
+  // grava o resultado na planilha via Apps Script (JSONP — bypass CORS)
+  function registrar(acertos, total){
+    if(!sessao){ console.warn('Sem sessão ativa — faça login antes de registrar.'); return Promise.reject('sem-sessao'); }
+
+    const segundos = Math.round((Date.now() - sessao.inicio) / 1000);
+    const pct = total ? Math.round((acertos / total) * 100) : 0;
+
+    const params = {
+      action:  'registrar',
+      ops:     sessao.ops,
+      nome:    sessao.nome,
+      hub:     sessao.hub,
+      acertos: acertos,
+      total:   total,
+      pct:     pct,
+      segundos: segundos
+    };
+
+    return jsonp(WEBAPP_URL, params)
+      .then(r => { console.log('Registrado:', r); return r; })
+      .catch(err => { console.error('Falha ao registrar:', err); throw err; });
+  }
+
+  // JSONP genérico (mesma técnica dos seus painéis SPX)
+  function jsonp(baseUrl, params){
+    return new Promise((resolve, reject) => {
+      const cb = 'fleetcb_' + Math.random().toString(36).slice(2);
+      const qs = Object.keys(params)
+        .map(k => encodeURIComponent(k) + '=' + encodeURIComponent(params[k]))
+        .join('&');
+      const url = baseUrl + (baseUrl.includes('?') ? '&' : '?') + qs + '&callback=' + cb;
+
+      const s = document.createElement('script');
+      const limpar = () => { delete window[cb]; s.remove(); };
+      const timer = setTimeout(() => { limpar(); reject('timeout'); }, 15000);
+
+      window[cb] = (data) => { clearTimeout(timer); limpar(); resolve(data); };
+      s.onerror = () => { clearTimeout(timer); limpar(); reject('script-error'); };
+      s.src = url;
+      document.body.appendChild(s);
+    });
+  }
+
+  el.start.addEventListener('click', iniciar);
+  el.exit.addEventListener('click', sair);
+
+  // API pública
+  return { registrar, sair, get sessao(){ return sessao; } };
+})();
+
+/* ---- EXEMPLO de como fechar o desafio (remova quando integrar) ----
+   Quando seu quiz terminar, é só:
+
+     FleetLogin.registrar(acertosDoParticipante, totalDePerguntas)
+       .then(() => mostrarTelaFinal())
+       .catch(() => alert('Não consegui registrar. Verifique a conexão.'));
+*/
+</script>
+</body>
+</html>
