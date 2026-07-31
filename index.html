@@ -432,7 +432,7 @@
           <input type="text" id="playerHub" placeholder="Digite seu hub" maxlength="30" autocomplete="off">
         </div>
         <button class="btn btn-primary" id="startBtn" disabled>Iniciar Desafio</button>
-        <button class="btn btn-ghost" id="clearRankingBtn" style="width:100%;margin-top:10px;">Limpar ranking deste dispositivo</button>
+        <button class="btn btn-ghost" id="clearRankingBtn" style="width:100%;margin-top:10px;">🔒 Limpar ranking (senha)</button>
       </div>
     </div>
 
@@ -468,7 +468,8 @@
       </div>
       <div class="lb-title">Ranking da reunião</div>
       <ul class="leaderboard" id="leaderboardList"></ul>
-      <button class="btn btn-ghost" id="restartBtn" style="width:100%;margin-top:18px;">Jogar novamente</button>
+      <button class="btn btn-ghost" id="refreshBtn" style="width:100%;margin-top:12px;">🔄 Atualizar ranking</button>
+      <button class="btn btn-ghost" id="restartBtn" style="width:100%;margin-top:10px;">Jogar novamente</button>
     </div>
 
   </div>
@@ -496,7 +497,40 @@ const HINT_PENALTY = 15;
 const MIN_POINTS = 40;
 
 
-const RANKING_KEY = "fleet_ranking_v1";
+/* ===== SUPABASE — cole suas credenciais ===== */
+const SUPABASE_URL = "https://tslhvfvwhybaqhkwbgyl.supabase.co";
+const SUPABASE_ANON_KEY = "COLE_AQUI_A_ANON_KEY";
+const TABELA = "desafio_ranking";
+
+function sbHeaders(){
+  return {
+    "apikey": SUPABASE_ANON_KEY,
+    "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+    "Content-Type": "application/json"
+  };
+}
+// insere um resultado
+function sbInserir(reg){
+  return fetch(SUPABASE_URL + "/rest/v1/" + TABELA, {
+    method: "POST",
+    headers: Object.assign(sbHeaders(), { "Prefer": "return=minimal" }),
+    body: JSON.stringify(reg)
+  });
+}
+// busca top 50 (maior score, menor tempo)
+function sbListar(){
+  const url = SUPABASE_URL + "/rest/v1/" + TABELA +
+    "?select=ops,nome,hub,score,tempo_s,criado_em&order=score.desc,tempo_s.asc&limit=50";
+  return fetch(url, { headers: sbHeaders() }).then(r => r.ok ? r.json() : []);
+}
+// limpa via função protegida por senha (RPC)
+function sbLimpar(senha){
+  return fetch(SUPABASE_URL + "/rest/v1/rpc/limpar_ranking", {
+    method: "POST",
+    headers: sbHeaders(),
+    body: JSON.stringify({ senha: senha })
+  }).then(r => r.ok ? r.json() : "erro");
+}
 
 // aceita "ops37310", "OPS 37310", "37310" -> "ops37310"
 function normalizaOps(v){
@@ -829,7 +863,7 @@ function nextQuestion(){
   }
 }
 
-function finishGame(){
+async function finishGame(){
   state.elapsedMs = Date.now() - state.startTime;
 
   $("finalPlayerName").textContent = state.name;
@@ -837,52 +871,51 @@ function finishGame(){
   const hubText = state.hub ? "Hub: " + state.hub : "";
   $("finalPlayerHub").textContent = hubText + (hubText ? " · " : "") + "Tempo: " + formatTime(state.elapsedMs);
 
-  let leaderboard = [];
-  try {
-    const raw = localStorage.getItem(RANKING_KEY);
-    if(raw) leaderboard = JSON.parse(raw);
-  } catch(e){
-    leaderboard = [];
-  }
-
-  state.lastTs = Date.now();
-  leaderboard.push({ ops: state.ops, name: state.name, hub: state.hub, score: state.score, acertos: state.solvedCount || 0, total: QUESTIONS.length, timeMs: state.elapsedMs, ts: state.lastTs });
-  leaderboard.sort((a,b) => {
-    if(b.score !== a.score) return b.score - a.score;
-    return (a.timeMs || 0) - (b.timeMs || 0);
-  });
-  leaderboard = leaderboard.slice(0, 50);
-
-  try {
-    localStorage.setItem(RANKING_KEY, JSON.stringify(leaderboard));
-  } catch(e){
-    console.error("Falha ao salvar ranking:", e);
-  }
-
-  renderLeaderboard(leaderboard);
   showScreen("screen-result");
-
   const pct = state.solvedCount / QUESTIONS.length;
   Sound.win(pct);
   if(pct >= 0.7) confettiBurst();
+
+  const tempoS = Math.round(state.elapsedMs / 1000);
+  state.lastKey = state.ops + "|" + state.score + "|" + tempoS;
+
+  const ul = $("leaderboardList");
+  ul.innerHTML = '<div class="lb-empty">Salvando resultado…</div>';
+
+  const reg = {
+    ops: state.ops, nome: state.name, hub: state.hub,
+    score: state.score, acertos: state.solvedCount || 0,
+    total: QUESTIONS.length, tempo_s: tempoS
+  };
+
+  try {
+    await sbInserir(reg);
+    const lista = await sbListar();
+    renderLeaderboard(lista);
+  } catch(e){
+    console.error("Falha no Supabase:", e);
+    ul.innerHTML = '<div class="lb-empty">Não foi possível carregar o ranking online. Verifique a conexão.</div>';
+  }
 }
 
 function renderLeaderboard(list){
   const ul = $("leaderboardList");
   ul.innerHTML = "";
-  if(list.length === 0){
+  if(!list || list.length === 0){
     ul.innerHTML = '<div class="lb-empty">Nenhum resultado ainda.</div>';
     return;
   }
   list.forEach((entry, i) => {
     const li = document.createElement("li");
-    const isMe = entry.ts && state.lastTs && entry.ts === state.lastTs;
+    const tempoS = (typeof entry.tempo_s === "number") ? entry.tempo_s : null;
+    const key = entry.ops + "|" + entry.score + "|" + (tempoS != null ? tempoS : "");
+    const isMe = state.lastKey && key === state.lastKey;
     if(isMe) li.classList.add("me");
     const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : (i+1);
     const hubBits = [];
     if(entry.ops) hubBits.push(escapeHtml(entry.ops));
     if(entry.hub) hubBits.push(escapeHtml(entry.hub));
-    if(typeof entry.timeMs === "number") hubBits.push(formatTime(entry.timeMs));
+    if(tempoS != null) hubBits.push(formatTime(tempoS * 1000));
     const hubLine = hubBits.length ? `<div class="lb-hub">${hubBits.join(" · ")}</div>` : "";
     li.innerHTML = `<span class="rank-num">${medal}</span><span class="lb-name-wrap"><div class="lb-name">${escapeHtml(entry.name)}</div>${hubLine}</span><span class="lb-score">${entry.score}</span>`;
     ul.appendChild(li);
@@ -944,6 +977,18 @@ $("submitBtn").addEventListener("click", submitAnswer);
 $("hintBtn").addEventListener("click", useHint);$("nextBtn").addEventListener("click", nextQuestion);
 $("restartBtn").addEventListener("click", resetGame);
 
+$("refreshBtn").addEventListener("click", async () => {
+  Sound.click();
+  const ul = $("leaderboardList");
+  ul.innerHTML = '<div class="lb-empty">Atualizando…</div>';
+  try {
+    const lista = await sbListar();
+    renderLeaderboard(lista);
+  } catch(e){
+    ul.innerHTML = '<div class="lb-empty">Não foi possível atualizar. Verifique a conexão.</div>';
+  }
+});
+
 $("muteBtn").addEventListener("click", () => {
   const m = !Sound.isMuted();
   Sound.setMuted(m);
@@ -951,12 +996,21 @@ $("muteBtn").addEventListener("click", () => {
   if(!m){ Sound.unlock(); Sound.click(); }
 });
 
-$("clearRankingBtn").addEventListener("click", () => {
-  if(!confirm("Tem certeza que deseja apagar todo o ranking deste dispositivo? Essa ação não pode ser desfeita.")) return;
+$("clearRankingBtn").addEventListener("click", async () => {
+  const senha = prompt("Digite a senha para apagar TODO o ranking (ação irreversível):");
+  if(senha === null) return; // cancelou
+  if(!senha){ alert("Senha vazia. Nada foi apagado."); return; }
   try {
-    localStorage.removeItem(RANKING_KEY);
-    Sound.click();
-    alert("Ranking apagado com sucesso.");
+    const r = await sbLimpar(senha);
+    if(r === "ok"){
+      Sound.click();
+      alert("Ranking apagado com sucesso.");
+    } else if(r === "senha_invalida"){
+      Sound.wrong();
+      alert("Senha incorreta. O ranking não foi apagado.");
+    } else {
+      alert("Não foi possível apagar o ranking. Verifique a conexão.");
+    }
   } catch(e) {
     alert("Ocorreu um erro ao apagar o ranking.");
   }
